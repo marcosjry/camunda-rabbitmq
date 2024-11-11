@@ -1,0 +1,59 @@
+services:
+
+  yugabyte:
+    image: yugabytedb/yugabyte:2024.1.3.0-b105
+    container_name: yugabyte
+    ports:
+      - "15433:15433"
+      - "7000:7000" # YB-Master
+      - "9000:9000" # YB-TServer
+      - "5433:5433" # PostgreSQL YSQL Port
+      - "2222:22" # SSH para acesso ao container
+    volumes:
+      - ./yb-master.conf:/home/yugabyte/conf/yb-master.conf
+      - ./yb-tserver.conf:/home/yugabyte/conf/yb-tserver.conf
+      - /var/lib/yugabyte:/home/yugabyte/data
+    command: [
+      "bin/yugabyted", "start",
+      "--base_dir=/home/yugabyte/yb_data",
+      "--background=false"
+    ]
+    environment:
+      - POSTGRES_USER=yugabyte
+      - POSTGRES_PASSWORD=yugabyte
+      - POSTGRES_DB=camunda #
+  db-init:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: yugabyte
+      POSTGRES_PASSWORD: yugabyte
+    command: >
+      /bin/sh -c "
+        until pg_isready -h yugabyte -p 5433; do
+          echo 'Aguardando o YugabyteDB...';
+          sleep 5;
+        done;
+        echo 'Banco de dados pronto. Verificando se o banco camunda existe...';
+        psql -h yugabyte -p 5433 -U yugabyte -tc \"SELECT 1 FROM pg_database WHERE datname = 'camunda'\" | grep -q 1 ||
+        psql -h yugabyte -p 5433 -U yugabyte -c 'CREATE DATABASE camunda';
+      "
+    depends_on:
+      - yugabyte
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h yugabyte -p 5433" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  camunda:
+    image: camunda/camunda-bpm-platform:run-latest
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_DRIVER=org.postgresql.Driver # Mantém o driver PostgreSQL
+      - DB_URL=jdbc:postgresql://yugabyte:5433/camunda  # Porta e hostname do Yugabyte
+      - DB_USERNAME=yugabyte  # Usuário padrão do Yugabyte
+      - DB_PASSWORD=yugabyte  # Senha padrão do Yugabyte
+    depends_on:
+      db-init:
+        condition: service_healthy

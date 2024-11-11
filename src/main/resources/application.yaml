@@ -1,0 +1,31 @@
+camunda:
+  bpm:
+    enabled: true
+    job-execution:
+      enabled: true
+camunda.bpm.admin-user:
+  id: demo
+  password: demo
+camunda.bpm.metrics.enabled: false
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    listener:
+      simple:
+        auto-startup: true
+        missing-queues-fatal: false
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  h2:
+    console.enabled: true
+  logging:
+    level:
+      org.camunda.bpm: DEBUG
+      org.camunda.bpm.engine.rest: DEBUG
